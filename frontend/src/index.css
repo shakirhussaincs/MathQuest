@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased;
+  }
+}
+
+.font-quest {
+  font-family: 'Cinzel', serif;
+}
+
+/* Custom adventure glass card */
+.glass-panel {
+  background: rgba(19, 27, 46, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 54, 85, 0.7);
+}
+
+.glass-panel-glow {
+  background: rgba(26, 35, 58, 0.85);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 25px -5px rgba(245, 158, 11, 0.15);
+}
+
