@@ -9,27 +9,18 @@
     "frontend": {
       "root": "frontend",
       "framework": "vite",
-      "installCommand": "npm ci && chmod +x ./node_modules/.bin/vite",
-      "bindings": []
-    }
-      "root": "frontend",
-      "framework": "vite",
+      "installCommand": "npm ci && chmod +x ./node_modules/.bin/vite && npm run build",
       "bindings": []
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": {
-        "service": "backend"
-      }
+      "destination": { "service": "backend" }
     },
     {
       "source": "/(.*)",
-      "destination": {
-        "service": "frontend"
-      }
+      "destination": { "service": "frontend" }
     }
   ]
 }
-
