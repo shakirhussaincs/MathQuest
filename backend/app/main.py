@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base, SessionLocal
 from app.routes.auth import router as auth_router
+from app.routes.db_check import router as db_check_router
 from app.routes.users import router as users_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.worlds import router as worlds_router
@@ -96,7 +97,7 @@ app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(dashboard_router, prefix=settings.API_V1_STR)
 app.include_router(worlds_router, prefix=settings.API_V1_STR)
 app.include_router(missions_router, prefix=settings.API_V1_STR)
-app.include_router(gamification_router, prefix=settings.API_V1_STR)
+app.include_router(db_check_router, prefix=settings.API_V1_STR)
 
 @app.get("/api/v1/health", tags=["Health"])
 def health_check():
