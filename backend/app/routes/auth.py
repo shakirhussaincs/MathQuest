@@ -114,9 +114,9 @@ def forgot_password(req: PasswordResetRequest, db: Session = Depends(get_db)):
     reset_token = create_password_reset_token(user.email)
     
     # In prototype/development mode, return token in detail for testing and evaluation
+    # Removed token disclosure for security. In production, an email should be sent with the reset link.
     return MessageResponse(
-        message="If an account with that email exists, a password reset link has been dispatched.",
-        detail=f"Reset token (prototype mode): {reset_token}"
+        message="If an account with that email exists, a password reset link has been dispatched."
     )
 
 @router.post("/reset-password", response_model=MessageResponse)
