@@ -4,8 +4,18 @@ from app.config import settings
 
 # Handle PostgreSQL / Supabase URI format compatibility
 db_url = settings.DATABASE_URL
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+if db_url.startswith("postgresql://"):
+    db_url = db_url.replace(
+        "postgresql://",
+        "postgresql+psycopg://",
+        1
+    )
+elif db_url.startswith("postgres://"):
+    db_url = db_url.replace(
+        "postgres://",
+        "postgresql+psycopg://",
+        1
+    )
 
 # PostgreSQL / Supabase pool configuration vs local SQLite
 if db_url.startswith("sqlite"):
