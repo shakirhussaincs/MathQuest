@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     
     # Environment
     ENVIRONMENT: str = "development"
+
+    # Fixed demo‑admin credentials (used only by the provisioning routine)
+    # These values are read from the .env file (or the host environment).
+    # Example .env entries (do **not** commit this file to source control):
+    #   FIXED_ADMIN_EMAIL=alishbaM@gmail.com
+    #   FIXED_ADMIN_PASSWORD=123456
+    FIXED_ADMIN_EMAIL: str | None = None
+    FIXED_ADMIN_PASSWORD: str | None = None
     
     model_config = SettingsConfigDict(
         env_file=".env",

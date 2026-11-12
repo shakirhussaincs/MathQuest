@@ -14,4 +14,4 @@ def db_ping(db: Session = Depends(get_db)):
         "database": bind.dialect.name,
         "driver": bind.dialect.driver,
     }
-
+    

@@ -40,11 +40,15 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     # Hash password securely
     hashed_pw = hash_password(user_in.password)
 
+    # Enforce role restrictions: only STUDENT and TEACHER are allowed for public registration.
+    # Any other role (including ADMIN) is coerced to STUDENT.
+    allowed_role = user_in.role if user_in.role in (UserRole.STUDENT, UserRole.TEACHER) else UserRole.STUDENT
+
     new_user = User(
         email=user_in.email.lower(),
         display_name=user_in.display_name.strip(),
         password_hash=hashed_pw,
-        role=user_in.role,
+        role=allowed_role,
         grade=user_in.grade,
         avatar=user_in.avatar or "avatar_explorer_1",
         is_active=True

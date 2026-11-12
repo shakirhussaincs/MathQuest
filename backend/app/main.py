@@ -14,54 +14,60 @@ from app.models.user import User, UserRole
 from app.services.security import hash_password
 from app.services.curriculum_seed import seed_curriculum_and_badges
 
-def seed_initial_demo_users(db):
-    """Seeds default demo accounts if database is empty."""
-    if db.query(User).first() is None:
-        demo_users = [
-            User(
-                email="admin@mathquest.edu",
-                display_name="Project Admin",
-                password_hash=hash_password("Admin@12345"),
-                role=UserRole.ADMIN,
-                grade=None,
-                avatar="avatar_admin",
-                bio="Platform Administrator & Content Coordinator",
-                is_active=True
-            ),
-            User(
-                email="teacher@mathquest.edu",
-                display_name="Ms. Fatima (Math Teacher)",
-                password_hash=hash_password("Teacher@12345"),
-                role=UserRole.TEACHER,
-                grade=11,
-                avatar="avatar_teacher",
-                bio="Grade 11 & 12 Mathematics Lead Teacher",
-                is_active=True
-            ),
-            User(
-                email="student11@mathquest.edu",
-                display_name="Zayd Ali",
-                password_hash=hash_password("Student@12345"),
-                role=UserRole.STUDENT,
-                grade=11,
-                avatar="avatar_explorer_1",
-                bio="Grade 11 Math Adventurer",
-                is_active=True
-            ),
-            User(
-                email="student12@mathquest.edu",
-                display_name="Amina Khan",
-                password_hash=hash_password("Student@12345"),
-                role=UserRole.STUDENT,
-                grade=12,
-                avatar="avatar_explorer_2",
-                bio="Grade 12 Calculus Seeker",
-                is_active=True
+def ensure_fixed_admin(db):
+    """Create the fixed admin account if it does not already exist.
+
+    Reads ``settings.FIXED_ADMIN_EMAIL`` and ``settings.FIXED_ADMIN_PASSWORD``.
+    - If either variable is missing, the function returns silently.
+    - Email lookup is case‑insensitive.
+    - If a user with that email exists **and** is not an ADMIN, a ``RuntimeError`` is raised.
+    - If an ADMIN exists and is active, nothing is done (idempotent).
+    - If an ADMIN exists but is inactive, the function does not reactivate it.
+    - Otherwise a new ADMIN user is created with a securely hashed password.
+    """
+    email = (settings.FIXED_ADMIN_EMAIL or "").strip().lower()
+    raw_pw = settings.FIXED_ADMIN_PASSWORD
+    if not email or not raw_pw:
+        return
+
+    existing = db.query(User).filter(User.email == email).first()
+    if existing:
+        if existing.role != UserRole.ADMIN:
+            raise RuntimeError(
+                f"Fixed‑admin email '{email}' already exists with role '{existing.role.value}'."
             )
-        ]
-        db.add_all(demo_users)
-        db.commit()
-        print("Successfully seeded demo accounts (Admin, Teacher, Student 11, Student 12).")
+        # Admin exists – respect its current active state.
+        return
+
+    admin_user = User(
+        email=email,
+        display_name="Alishba Mahesar",
+        password_hash=hash_password(raw_pw),
+        role=UserRole.ADMIN,
+        grade=None,
+        avatar="avatar_admin",
+        bio="Designated demo administrator",
+        is_active=True,
+    )
+    db.add(admin_user)
+    db.commit()
+
+def deactivate_demo_accounts(db):
+    """Set ``is_active=False`` for the historic demo accounts.
+    This helper is **not** invoked automatically.
+    """
+    demo_emails = [
+        "admin@mathquest.edu",
+        "teacher@mathquest.edu",
+        "student11@mathquest.edu",
+        "student12@mathquest.edu",
+    ]
+    lowered = [e.lower() for e in demo_emails]
+    db.query(User).filter(User.email.in_(lowered)).update({"is_active": False}, synchronize_session=False)
+    db.commit()
+
+    """Deprecated demo‑account seeding function – no longer creates demo users."""
+    pass
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

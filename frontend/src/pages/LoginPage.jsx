@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/client';
-import { Compass, Lock, Mail, AlertCircle, ArrowRight, Sparkles, KeyRound } from 'lucide-react';
+import { Compass, Lock, Mail, AlertCircle, ArrowRight, KeyRound } from 'lucide-react';
 
 export default function LoginPage({ onNavigate }) {
   const { login } = useAuth();
@@ -27,11 +27,7 @@ export default function LoginPage({ onNavigate }) {
     }
   };
 
-  const fillDemoAccount = (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setError('');
-  };
+
 
   const handleForgotSubmit = async (e) => {
     e.preventDefault();
@@ -171,49 +167,7 @@ export default function LoginPage({ onNavigate }) {
           )}
 
           {/* Quick Evaluator Demo Logins */}
-          <div className="mt-8 pt-6 border-t border-quest-border/80">
-            <div className="flex items-center space-x-1.5 text-xs font-semibold text-amber-400 mb-3 uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Instant Demo Accounts (One-Click Fill)</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => fillDemoAccount('student11@mathquest.edu', 'Student@12345')}
-                className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-quest-border text-left transition-colors"
-              >
-                <div className="font-semibold text-emerald-400">Student (Grade 11)</div>
-                <div className="text-[10px] text-slate-400">Zayd Ali</div>
-              </button>
 
-              <button
-                type="button"
-                onClick={() => fillDemoAccount('student12@mathquest.edu', 'Student@12345')}
-                className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-quest-border text-left transition-colors"
-              >
-                <div className="font-semibold text-cyan-400">Student (Grade 12)</div>
-                <div className="text-[10px] text-slate-400">Amina Khan</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fillDemoAccount('teacher@mathquest.edu', 'Teacher@12345')}
-                className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-quest-border text-left transition-colors"
-              >
-                <div className="font-semibold text-blue-400">Teacher</div>
-                <div className="text-[10px] text-slate-400">Ms. Fatima</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => fillDemoAccount('admin@mathquest.edu', 'Admin@12345')}
-                className="p-2 rounded-lg bg-slate-800/80 hover:bg-slate-800 border border-quest-border text-left transition-colors"
-              >
-                <div className="font-semibold text-purple-400">Administrator</div>
-                <div className="text-[10px] text-slate-400">Project Admin</div>
-              </button>
-            </div>
-          </div>
 
           <div className="mt-6 text-center text-xs text-slate-400">
             Don't have an account yet?{' '}
