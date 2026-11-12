@@ -31,7 +31,7 @@ def ensure_fixed_admin(db):
     if not email or not raw_pw:
         return
 
-    existing = db.query(User).filter(User.email == email).first()
+    existing = db.query(User).filter(func.lower(User.email) == email).first()
     if existing:
         if existing.role != UserRole.ADMIN:
             raise RuntimeError(
@@ -76,8 +76,12 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        seed_initial_demo_users(db)
         seed_curriculum_and_badges(db)
+        # Provision fixed admin if env vars are set
+        try:
+            ensure_fixed_admin(db)
+        except RuntimeError as exc:
+            print(f"Admin provisioning error: {exc}")
     finally:
         db.close()
     yield
