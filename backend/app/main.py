@@ -13,6 +13,7 @@ from app.routes.gamification import router as gamification_router
 from app.models.user import User, UserRole
 from app.services.security import hash_password
 from app.services.curriculum_seed import seed_curriculum_and_badges
+from sqlalchemy import func
 
 def ensure_fixed_admin(db):
     """Create the fixed admin account if it does not already exist.
