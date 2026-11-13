@@ -12,9 +12,16 @@ import AdminPage from './pages/AdminPage';
 
 function AppContent() {
   const { user, loading } = useAuth();
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState(() => {
+    return localStorage.getItem('mathquest_view') || 'dashboard';
+  });
   const [selectedWorldId, setSelectedWorldId] = useState(null);
   const [selectedMissionId, setSelectedMissionId] = useState(null);
+
+  const navigateTo = (view) => {
+    localStorage.setItem('mathquest_view', view);
+    setCurrentView(view);
+  };
 
   if (loading) {
     return (
@@ -29,11 +36,11 @@ function AppContent() {
   if (!user) {
     return (
       <div className="min-h-screen bg-[#0a0e17]">
-        <Navbar currentView={currentView} setCurrentView={setCurrentView} />
+        <Navbar currentView={currentView} setCurrentView={navigateTo} />
         {currentView === 'register' ? (
-          <RegisterPage onNavigate={setCurrentView} />
+          <RegisterPage onNavigate={navigateTo} />
         ) : (
-          <LoginPage onNavigate={setCurrentView} />
+          <LoginPage onNavigate={navigateTo} />
         )}
       </div>
     );
@@ -41,22 +48,22 @@ function AppContent() {
 
   const handleSelectWorld = (worldId) => {
     setSelectedWorldId(worldId);
-    setCurrentView('worldDetail');
+    navigateTo('worldDetail');
   };
 
   const handleSelectMission = (missionId) => {
     setSelectedMissionId(missionId);
-    setCurrentView('missionPlayer');
+    navigateTo('missionPlayer');
   };
 
   return (
     <div className="min-h-screen bg-[#0a0e17] flex flex-col">
-      <Navbar currentView={currentView} setCurrentView={setCurrentView} />
+      <Navbar currentView={currentView} setCurrentView={navigateTo} />
       
       <main className="flex-1 pb-16">
         {currentView === 'dashboard' && (
           <StudentDashboard 
-            onNavigate={setCurrentView}
+            onNavigate={navigateTo}
             onSelectWorld={handleSelectWorld}
             onSelectMission={handleSelectMission}
           />
@@ -65,7 +72,7 @@ function AppContent() {
         {currentView === 'worldDetail' && (
           <WorldDetailPage 
             worldId={selectedWorldId}
-            onBack={() => setCurrentView('dashboard')}
+            onBack={() => navigateTo('dashboard')}
             onSelectMission={handleSelectMission}
           />
         )}
@@ -73,8 +80,8 @@ function AppContent() {
         {currentView === 'missionPlayer' && (
           <MissionPlayer
             missionId={selectedMissionId}
-            onBack={() => setCurrentView('dashboard')}
-            onComplete={() => setCurrentView('dashboard')}
+            onBack={() => navigateTo('dashboard')}
+            onComplete={() => navigateTo('dashboard')}
           />
         )}
 
@@ -87,7 +94,15 @@ function AppContent() {
         )}
 
         {currentView === 'admin' && (
-          <AdminPage />
+          user?.role === 'admin' ? (
+            <AdminPage />
+          ) : (
+            <StudentDashboard 
+              onNavigate={navigateTo}
+              onSelectWorld={handleSelectWorld}
+              onSelectMission={handleSelectMission}
+            />
+          )
         )}
       </main>
 

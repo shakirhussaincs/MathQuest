@@ -9,19 +9,36 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadUser() {
       if (token) {
         try {
           const profile = await userApi.getProfile();
-          setUser(profile);
+          if (!isCancelled) {
+            setUser(profile);
+          }
         } catch (err) {
-          console.error("Session expired or invalid token:", err);
-          logout();
+          if (!isCancelled) {
+            console.error("Session expired or invalid token:", err);
+            logout();
+          }
+        }
+      } else {
+        if (!isCancelled) {
+          setUser(null);
         }
       }
-      setLoading(false);
+      if (!isCancelled) {
+        setLoading(false);
+      }
     }
+
     loadUser();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [token]);
 
   const login = async (email, password) => {
@@ -45,6 +62,7 @@ export function AuthProvider({ children }) {
       authApi.logout().catch(() => {});
     } finally {
       localStorage.removeItem('mathquest_token');
+      localStorage.removeItem('mathquest_view');
       setToken(null);
       setUser(null);
     }

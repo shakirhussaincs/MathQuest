@@ -18,57 +18,68 @@ from sqlalchemy import func
 def ensure_fixed_admin(db):
     """Create the fixed admin account if it does not already exist.
 
-    Reads ``settings.FIXED_ADMIN_EMAIL`` and ``settings.FIXED_ADMIN_PASSWORD``.
-    - If either variable is missing, the function returns silently.
+    Reads ``settings.FIXED_ADMIN_EMAIL`` and ``settings.FIXED_ADMIN_PASSWORD``,
+    with direct environment variable fallbacks for 'fixed_Email' and 'Fixed_Password'.
+    - In production, missing credentials raise a RuntimeError to prevent unprovisioned deployments.
+    - In local development, missing credentials log and return safely.
     - Email lookup is case‑insensitive.
     - If a user with that email exists **and** is not an ADMIN, a ``RuntimeError`` is raised.
     - If an ADMIN exists and is active, nothing is done (idempotent).
     - If an ADMIN exists but is inactive, the function does not reactivate it.
     - Otherwise a new ADMIN user is created with a securely hashed password.
     """
-    email = (settings.FIXED_ADMIN_EMAIL or "").strip().lower()
-    raw_pw = settings.FIXED_ADMIN_PASSWORD
+    import os
+    is_prod = settings.is_production
+    email = (
+        settings.FIXED_ADMIN_EMAIL
+        or os.getenv("fixed_Email")
+        or os.getenv("FIXED_ADMIN_EMAIL")
+        or os.getenv("fixed_email")
+        or os.getenv("FIXED_EMAIL")
+        or ""
+    ).strip().lower()
+    raw_pw = (
+        settings.FIXED_ADMIN_PASSWORD
+        or os.getenv("Fixed_Password")
+        or os.getenv("FIXED_ADMIN_PASSWORD")
+        or os.getenv("fixed_password")
+        or os.getenv("FIXED_PASSWORD")
+    )
     if not email or not raw_pw:
+        if is_prod:
+            raise RuntimeError(
+                "Fixed admin credentials (email and password) must be configured in production."
+            )
+        print("Admin provisioning skipped: fixed admin credentials not set in development environment.")
         return
 
     existing = db.query(User).filter(func.lower(User.email) == email).first()
     if existing:
         if existing.role != UserRole.ADMIN:
             raise RuntimeError(
-                f"Fixed‑admin email '{email}' already exists with role '{existing.role.value}'."
+                f"Fixed-admin email '{email}' already exists with role '{existing.role.value}'."
             )
-        # Admin exists – respect its current active state.
+        # Admin exists – respect its current active state (do not reactivate or modify).
+        print(f"Fixed admin '{email}' already exists (active={existing.is_active}).")
         return
 
-    admin_user = User(
-        email=email,
-        display_name="Alishba Mahesar",
-        password_hash=hash_password(raw_pw),
-        role=UserRole.ADMIN,
-        grade=None,
-        avatar="avatar_admin",
-        bio="Designated demo administrator",
-        is_active=True,
-    )
-    db.add(admin_user)
-    db.commit()
-
-def deactivate_demo_accounts(db):
-    """Set ``is_active=False`` for the historic demo accounts.
-    This helper is **not** invoked automatically.
-    """
-    demo_emails = [
-        "admin@mathquest.edu",
-        "teacher@mathquest.edu",
-        "student11@mathquest.edu",
-        "student12@mathquest.edu",
-    ]
-    lowered = [e.lower() for e in demo_emails]
-    db.query(User).filter(User.email.in_(lowered)).update({"is_active": False}, synchronize_session=False)
-    db.commit()
-
-    """Deprecated demo‑account seeding function – no longer creates demo users."""
-    pass
+    try:
+        admin_user = User(
+            email=email,
+            display_name="Alishba Mahesar",
+            password_hash=hash_password(raw_pw),
+            role=UserRole.ADMIN,
+            grade=None,
+            avatar="avatar_admin",
+            bio="MathQuest Platform Administrator",
+            is_active=True,
+        )
+        db.add(admin_user)
+        db.commit()
+        print(f"Fixed admin account provisioned successfully for '{email}'.")
+    except Exception as exc:
+        db.rollback()
+        raise RuntimeError(f"Failed to create fixed admin account: {exc}") from exc
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -77,11 +88,13 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_curriculum_and_badges(db)
-        # Provision fixed admin if env vars are set
+        # Provision fixed admin
         try:
             ensure_fixed_admin(db)
-        except RuntimeError as exc:
+        except Exception as exc:
             print(f"Admin provisioning error: {exc}")
+            if settings.is_production:
+                raise
     finally:
         db.close()
     yield
@@ -108,6 +121,7 @@ app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(dashboard_router, prefix=settings.API_V1_STR)
 app.include_router(worlds_router, prefix=settings.API_V1_STR)
 app.include_router(missions_router, prefix=settings.API_V1_STR)
+app.include_router(gamification_router, prefix=settings.API_V1_STR)
 app.include_router(db_check_router, prefix=settings.API_V1_STR)
 
 @app.get("/api/v1/health", tags=["Health"])
@@ -116,7 +130,7 @@ def health_check():
         "status": "healthy",
         "platform": settings.PROJECT_NAME,
         "version": "1.0.0",
-        "environment": settings.ENVIRONMENT
+        "environment": settings.effective_environment
     }
 
 @app.get("/", tags=["Root"])

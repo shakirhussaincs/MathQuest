@@ -18,8 +18,12 @@ export default function LoginPage({ onNavigate }) {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      onNavigate('dashboard');
+      const loggedUser = await login(email, password);
+      if (loggedUser?.role === 'admin') {
+        onNavigate('admin');
+      } else {
+        onNavigate('dashboard');
+      }
     } catch (err) {
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {

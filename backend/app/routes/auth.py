@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.database import get_db
 from app.models.user import User, UserRole
 from app.schemas.user import (
@@ -30,19 +31,29 @@ def register(user_in: UserRegister, db: Session = Depends(get_db)):
     - Validates grade selection (1 to 12).
     - Returns authentication token and user profile.
     """
-    existing_user = db.query(User).filter(User.email == user_in.email.lower()).first()
+    existing_user = db.query(User).filter(func.lower(User.email) == user_in.email.lower()).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="An account with this email address already exists."
         )
 
+    # Enforce role restrictions: only STUDENT and TEACHER are allowed for public registration.
+    # Public registration of ADMIN accounts is strictly rejected.
+    if user_in.role == UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrative accounts cannot be registered publicly."
+        )
+    if user_in.role not in (UserRole.STUDENT, UserRole.TEACHER):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid role. Only student and teacher accounts can be registered."
+        )
+
     # Hash password securely
     hashed_pw = hash_password(user_in.password)
-
-    # Enforce role restrictions: only STUDENT and TEACHER are allowed for public registration.
-    # Any other role (including ADMIN) is coerced to STUDENT.
-    allowed_role = user_in.role if user_in.role in (UserRole.STUDENT, UserRole.TEACHER) else UserRole.STUDENT
+    allowed_role = user_in.role
 
     new_user = User(
         email=user_in.email.lower(),
@@ -71,7 +82,7 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
     """
     Authenticates a registered user and issues a JWT token.
     """
-    user = db.query(User).filter(User.email == credentials.email.lower()).first()
+    user = db.query(User).filter(func.lower(User.email) == credentials.email.lower()).first()
     if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
