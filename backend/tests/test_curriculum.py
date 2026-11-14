@@ -5,9 +5,9 @@ def test_four_worlds_seeded(client, student_token, db_session):
     """Module 3: All 4 required worlds are present across Grades 11 and 12."""
     seed_curriculum_and_badges(db_session)
 
-    all_worlds = db_session.query(World).all()
-    assert len(all_worlds) == 4
-    titles = [w.title for w in all_worlds]
+    g11_12_worlds = db_session.query(World).filter(World.grade.in_([11, 12])).all()
+    assert len(g11_12_worlds) == 4
+    titles = [w.title for w in g11_12_worlds]
     assert "Algebra Kingdom" in titles
     assert "Trigonometry Island" in titles
     assert "Calculus Tower" in titles
@@ -48,7 +48,7 @@ def test_anti_cheat_mission_payload(client, student_token, db_session):
     """FR-27: Question correct_answer and explanation are NOT exposed prior to submission."""
     seed_curriculum_and_badges(db_session)
 
-    m1 = db_session.query(Mission).first()
+    m1 = db_session.query(Mission).filter(Mission.title == "Linear Equation Challenge").first()
     resp = client.get(f"/api/v1/missions/{m1.id}", headers={"Authorization": f"Bearer {student_token}"})
     assert resp.status_code == 200
     mission_data = resp.json()
@@ -73,7 +73,7 @@ def test_submit_answer_and_idempotent_xp(client, student_token, db_session):
     """FR-17, FR-22, FR-24, FR-33: Answer checked, explanation revealed, XP awarded idempotently."""
     seed_curriculum_and_badges(db_session)
 
-    m1 = db_session.query(Mission).first()
+    m1 = db_session.query(Mission).filter(Mission.title == "Linear Equation Challenge").first()
     q1 = db_session.query(Question).filter(Question.mission_id == m1.id).first()
 
     # 1. First submission (Correct)
@@ -102,7 +102,7 @@ def test_complete_mission_and_badge_unlock(client, student_token, test_student_u
     """FR-19, FR-28, FR-31: Finalize mission, award completion bonus XP, unlock badges."""
     seed_curriculum_and_badges(db_session)
 
-    m1 = db_session.query(Mission).first()
+    m1 = db_session.query(Mission).filter(Mission.title == "Linear Equation Challenge").first()
     questions = db_session.query(Question).filter(Question.mission_id == m1.id).all()
 
     # Submit all correct answers

@@ -82,7 +82,7 @@ def test_student_dashboard_recently_completed_and_accuracy(client, student_token
     """Module 2: Displays completed mission in recent list and updates accuracy."""
     seed_curriculum_and_badges(db_session)
 
-    m1 = db_session.query(Mission).first()
+    m1 = db_session.query(Mission).filter(Mission.title == "Linear Equation Challenge").first()
     # Record completed mission progress
     mp = MissionProgress(
         user_id=test_student_user.id,
