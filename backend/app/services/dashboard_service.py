@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.curriculum import (
     World,
     Topic,
@@ -65,13 +65,44 @@ def get_student_dashboard_data(db: Session, student: User) -> Dict[str, Any]:
     - Recommended next mission (Rule-based recommendation)
     - Achievement summary (earned & available badges)
     """
-    user_grade = student.grade or 11
+    user_grade = student.grade
 
     # 1. Total XP from RewardLedger (strictly idempotent)
     total_xp = db.query(func.coalesce(func.sum(RewardLedger.xp_delta), 0))\
                  .filter(RewardLedger.user_id == student.id)\
                  .scalar() or 0
     level_info = calculate_player_level(total_xp)
+
+    if user_grade is None:
+        return {
+            "student_profile": {
+                "id": student.id,
+                "display_name": student.display_name,
+                "email": student.email,
+                "grade": None,
+                "avatar": student.avatar,
+                "bio": student.bio,
+                "role": student.role.value
+            },
+            "gamification": level_info,
+            "learning_progress": {
+                "total_missions": 0,
+                "completed_missions": 0,
+                "completion_percentage": 0.0,
+                "total_questions_attempted": 0,
+                "correct_answers": 0,
+                "overall_accuracy_percentage": 0.0
+            },
+            "worlds": [],
+            "recently_completed_missions": [],
+            "recommended_next_mission": None,
+            "achievements": {
+                "total_badges": 0,
+                "earned_badges_count": 0,
+                "badges": []
+            }
+        }
+
 
     # 2. Total missions for student's grade & completed count
     total_grade_missions_q = db.query(Mission)\
@@ -300,4 +331,211 @@ def get_student_dashboard_data(db: Session, student: User) -> Dict[str, Any]:
             "badges": badges_data
         }
     }
+
+def get_teacher_dashboard_data(db: Session, teacher: User, grade: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Assembles the Educator Workspace data for the authenticated teacher:
+    - Teacher profile (name, email, role, avatar, assigned grade)
+    - Selected grade focus (defaulting to teacher.grade or 11)
+    - Grade Learning Insights (aggregate count of students, attempts, average accuracy)
+    - Curriculum Explorer (worlds, topics, missions for selected grade)
+    - Grade 1-12 curriculum coverage summary
+    """
+    target_grade = grade or teacher.grade or 11
+
+    # 1. Aggregate Grade Learning Insights
+    total_students_in_grade = db.query(User).filter(
+        User.role == UserRole.STUDENT,
+        User.grade == target_grade,
+        User.is_active == True
+    ).count()
+
+    grade_student_ids = [
+        uid for (uid,) in db.query(User.id).filter(
+            User.role == UserRole.STUDENT,
+            User.grade == target_grade
+        ).all()
+    ]
+
+    total_attempts_in_grade = 0
+    correct_attempts_in_grade = 0
+    avg_accuracy = 0.0
+
+    if grade_student_ids:
+        attempts = db.query(Attempt).filter(Attempt.user_id.in_(grade_student_ids)).all()
+        total_attempts_in_grade = len(attempts)
+        correct_attempts_in_grade = sum(1 for a in attempts if a.is_correct)
+        if total_attempts_in_grade > 0:
+            avg_accuracy = round((correct_attempts_in_grade / total_attempts_in_grade) * 100, 1)
+
+    # 2. Worlds & Topics for selected grade
+    worlds = db.query(World).filter(
+        World.grade == target_grade,
+        World.is_active == True
+    ).order_by(World.display_order).all()
+
+    worlds_data = []
+    total_missions_count = 0
+    total_questions_count = 0
+
+    for w in worlds:
+        topics = db.query(Topic).filter(Topic.world_id == w.id).order_by(Topic.display_order).all()
+        topics_data = []
+        for t in topics:
+            missions = db.query(Mission).filter(
+                Mission.topic_id == t.id,
+                Mission.is_active == True
+            ).order_by(Mission.display_order).all()
+            missions_data = []
+            for m in missions:
+                q_count = db.query(Question).filter(Question.mission_id == m.id, Question.is_active == True).count()
+                total_questions_count += q_count
+                missions_data.append({
+                    "id": m.id,
+                    "title": m.title,
+                    "instructions": m.instructions,
+                    "category": m.category,
+                    "difficulty": m.difficulty,
+                    "question_count": q_count,
+                    "xp_reward": m.xp_reward,
+                    "pass_percentage": m.pass_percentage,
+                    "is_boss": m.is_boss
+                })
+            total_missions_count += len(missions)
+            topics_data.append({
+                "id": t.id,
+                "title": t.title,
+                "description": t.description,
+                "learning_objectives": t.learning_objectives or [],
+                "missions": missions_data
+            })
+        worlds_data.append({
+            "id": w.id,
+            "title": w.title,
+            "description": w.description,
+            "grade": w.grade,
+            "icon": w.icon,
+            "theme_color": w.theme_color,
+            "topics": topics_data
+        })
+
+    # 3. Grade Coverage Overview for grades 1-12
+    grades_coverage = []
+    for g in range(1, 13):
+        w_cnt = db.query(World).filter(World.grade == g, World.is_active == True).count()
+        m_cnt = db.query(Mission)\
+                  .join(Topic, Mission.topic_id == Topic.id)\
+                  .join(World, Topic.world_id == World.id)\
+                  .filter(World.grade == g, Mission.is_active == True)\
+                  .count()
+        q_cnt = db.query(Question)\
+                  .join(Mission, Question.mission_id == Mission.id)\
+                  .join(Topic, Mission.topic_id == Topic.id)\
+                  .join(World, Topic.world_id == World.id)\
+                  .filter(World.grade == g, Question.is_active == True)\
+                  .count()
+        s_cnt = db.query(User).filter(User.role == UserRole.STUDENT, User.grade == g, User.is_active == True).count()
+        grades_coverage.append({
+            "grade": g,
+            "worlds_count": w_cnt,
+            "missions_count": m_cnt,
+            "questions_count": q_cnt,
+            "students_count": s_cnt
+        })
+
+    return {
+        "teacher": {
+            "id": teacher.id,
+            "display_name": teacher.display_name,
+            "email": teacher.email,
+            "role": teacher.role.value,
+            "grade": teacher.grade,
+            "avatar": teacher.avatar
+        },
+        "selected_grade": target_grade,
+        "insights": {
+            "total_students": total_students_in_grade,
+            "total_attempts": total_attempts_in_grade,
+            "correct_attempts": correct_attempts_in_grade,
+            "average_accuracy": avg_accuracy,
+            "total_worlds": len(worlds),
+            "total_missions": total_missions_count,
+            "total_questions": total_questions_count
+        },
+        "worlds": worlds_data,
+        "grades_coverage": grades_coverage
+    }
+
+def get_admin_dashboard_data(db: Session, admin: User) -> Dict[str, Any]:
+    """
+    Assembles the Platform Command Console data for administrators:
+    - User stats breakdown (total, students, teachers, admins, active, disabled)
+    - Curriculum stats breakdown (worlds, topics, missions, questions)
+    - Grade 1-12 coverage matrix
+    - System health and environment info
+    """
+    from app.config import settings
+
+    total_users = db.query(User).count()
+    students_count = db.query(User).filter(User.role == UserRole.STUDENT).count()
+    teachers_count = db.query(User).filter(User.role == UserRole.TEACHER).count()
+    admins_count = db.query(User).filter(User.role == UserRole.ADMIN).count()
+    active_users = db.query(User).filter(User.is_active == True).count()
+    inactive_users = total_users - active_users
+
+    total_worlds = db.query(World).count()
+    total_topics = db.query(Topic).count()
+    total_missions = db.query(Mission).count()
+    total_questions = db.query(Question).count()
+
+    grade_matrix = []
+    for g in range(1, 13):
+        w_cnt = db.query(World).filter(World.grade == g).count()
+        t_cnt = db.query(Topic).join(World, Topic.world_id == World.id).filter(World.grade == g).count()
+        m_cnt = db.query(Mission).join(Topic, Mission.topic_id == Topic.id).join(World, Topic.world_id == World.id).filter(World.grade == g).count()
+        q_cnt = db.query(Question).join(Mission, Question.mission_id == Mission.id).join(Topic, Mission.topic_id == Topic.id).join(World, Topic.world_id == World.id).filter(World.grade == g).count()
+        grade_matrix.append({
+            "grade": g,
+            "worlds": w_cnt,
+            "topics": t_cnt,
+            "missions": m_cnt,
+            "questions": q_cnt
+        })
+
+    active_sessions_count = 0
+    try:
+        from app.models.curriculum import MissionSession
+        active_sessions_count = db.query(MissionSession).filter(MissionSession.is_active == True).count()
+    except Exception:
+        db.rollback()
+
+    return {
+        "admin": {
+            "id": admin.id,
+            "display_name": admin.display_name,
+            "email": admin.email,
+            "role": admin.role.value
+        },
+        "users": {
+            "total": total_users,
+            "students": students_count,
+            "teachers": teachers_count,
+            "admins": admins_count,
+            "active": active_users,
+            "inactive": inactive_users
+        },
+        "curriculum": {
+            "total_worlds": total_worlds,
+            "total_topics": total_topics,
+            "total_missions": total_missions,
+            "total_questions": total_questions,
+            "grade_matrix": grade_matrix
+        },
+        "system": {
+            "environment": settings.effective_environment,
+            "database_status": "connected",
+            "active_attempt_sessions": active_sessions_count
+        }
+    }
+
 

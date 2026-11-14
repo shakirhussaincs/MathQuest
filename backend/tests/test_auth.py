@@ -77,14 +77,17 @@ def test_logout(client, student_token):
 
 def test_password_reset_flow(client, test_student_user):
     """FR-06: Requesting and confirming password reset works end-to-end."""
+    from app.services.security import create_password_reset_token
+
     # 1. Request reset
     req_resp = client.post("/api/v1/auth/forgot-password", json={
         "email": test_student_user.email
     })
     assert req_resp.status_code == 200
-    detail = req_resp.json()["detail"]
-    assert "Reset token" in detail
-    token = detail.split("Reset token (prototype mode): ")[1]
+    assert "password reset link has been dispatched" in req_resp.json()["message"]
+    
+    # Secure token created via service (as an email dispatch service would do)
+    token = create_password_reset_token(test_student_user.email)
 
     # 2. Confirm reset with new password
     confirm_resp = client.post("/api/v1/auth/reset-password", json={

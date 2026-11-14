@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, JSON, Index
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -118,3 +118,31 @@ class MissionProgress(Base):
     completed_at = Column(DateTime, nullable=True)
 
     mission = relationship("Mission", back_populates="progress_records")
+
+class MissionSession(Base):
+    """
+    Tracks active randomized question sessions for an attempt.
+    Guarantees stable question order during active attempts, distinct first questions
+    between concurrent students, and new random permutations upon new attempts.
+    """
+    __tablename__ = "mission_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    mission_id = Column(Integer, ForeignKey("missions.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_order = Column(JSON, nullable=False)  # List of integer question IDs in randomized order
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+
+    __table_args__ = (
+        Index(
+            "uq_active_user_mission_session",
+            "user_id",
+            "mission_id",
+            unique=True,
+            postgresql_where=(is_active == True),
+            sqlite_where=(is_active == True),
+        ),
+    )
+

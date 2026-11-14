@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.curriculum import World, Topic, Mission, MissionCategory, DifficultyLevel
 from app.services.auth_service import get_current_user, require_admin
 
@@ -42,15 +42,23 @@ def list_worlds(
     db: Session = Depends(get_db)
 ):
     """
-    Returns mathematics worlds filtered by student's grade or query parameter (FR-07, FR-08).
-    - Grade 11: Algebra Kingdom, Trigonometry Island
-    - Grade 12: Calculus Tower, Statistics City
+    Returns mathematics worlds.
+    - For students: strictly locked to the student's authenticated grade. Request query grade overrides are prohibited.
+    - For teachers and admins: can filter by query grade or explore all available grades across 1-12.
     """
-    target_grade = grade or current_user.grade or 11
-    worlds = db.query(World)\
-               .filter(World.grade == target_grade, World.is_active == True)\
-               .order_by(World.display_order)\
-               .all()
+    if current_user.role == UserRole.STUDENT:
+        target_grade = current_user.grade
+        if not target_grade:
+            return []
+        worlds = db.query(World)\
+                   .filter(World.grade == target_grade, World.is_active == True)\
+                   .order_by(World.display_order)\
+                   .all()
+    else:
+        query = db.query(World).filter(World.is_active == True)
+        if grade:
+            query = query.filter(World.grade == grade)
+        worlds = query.order_by(World.grade, World.display_order).all()
     
     result = []
     for w in worlds:
@@ -82,10 +90,18 @@ def get_world_details(
     """
     Returns the comprehensive realm view: topics, descriptions, learning objectives,
     and mission categorisation (Concept Exploration, Practice, Boss Challenge).
+    Strictly forbids students from accessing worlds outside their enrolled grade.
     """
     world = db.query(World).filter(World.id == world_id, World.is_active == True).first()
     if not world:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="World not found.")
+
+    if current_user.role == UserRole.STUDENT:
+        if not current_user.grade or world.grade != current_user.grade:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: This realm belongs to Grade {world.grade}. Your profile is enrolled in Grade {current_user.grade}."
+            )
 
     topics = db.query(Topic).filter(Topic.world_id == world.id).order_by(Topic.display_order).all()
     

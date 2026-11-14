@@ -75,6 +75,8 @@ export const userApi = {
 // Dashboard & Curriculum API
 export const dashboardApi = {
   getStudentDashboard: () => apiRequest('/dashboard/student'),
+  getTeacherDashboard: (grade) => apiRequest(`/dashboard/teacher${grade ? `?grade=${grade}` : ''}`),
+  getAdminDashboard: () => apiRequest('/dashboard/admin'),
   getWorlds: (grade) => apiRequest(`/worlds/${grade ? `?grade=${grade}` : ''}`),
   getWorldDetail: (worldId) => apiRequest(`/worlds/${worldId}`),
 };
@@ -82,6 +84,7 @@ export const dashboardApi = {
 // Mission & Question Solving API
 export const missionApi = {
   getMission: (missionId) => apiRequest(`/missions/${missionId}`),
+  getTeacherMissionPreview: (missionId) => apiRequest(`/missions/${missionId}/preview`),
   submitAttempt: (missionId, questionId, submittedAnswer) => apiRequest(`/missions/${missionId}/attempt`, {
     method: 'POST',
     body: JSON.stringify({
@@ -91,5 +94,21 @@ export const missionApi = {
   }),
   completeMission: (missionId) => apiRequest(`/missions/${missionId}/complete`, {
     method: 'POST'
+  })
+};
+
+// Admin Content Management API
+export const adminApi = {
+  createWorld: (data) => apiRequest('/worlds/', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  createTopic: (worldId, data) => apiRequest(`/worlds/${worldId}/topics`, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  }),
+  createMission: (topicId, data) => apiRequest(`/worlds/topics/${topicId}/missions`, {
+    method: 'POST',
+    body: JSON.stringify(data)
   })
 };

@@ -258,58 +258,68 @@ export default function StudentDashboard({ onNavigate, onSelectWorld, onSelectMi
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {worlds.map((world) => (
-            <div 
-              key={world.id}
-              onClick={() => onSelectWorld && onSelectWorld(world.id)}
-              className={`p-6 rounded-2xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
-                world.is_unlocked 
-                  ? 'glass-panel hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10'
-                  : 'bg-slate-900/40 border-quest-border opacity-70'
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-2xl border border-quest-border">
-                    {world.title.includes('Algebra') ? '📐' : world.title.includes('Trig') ? '🌊' : '🏰'}
+        {worlds.length === 0 ? (
+          <div className="glass-panel p-8 rounded-2xl border border-quest-border text-center space-y-3">
+            <Compass className="w-10 h-10 text-amber-400/50 mx-auto" />
+            <h3 className="font-quest text-base font-bold text-white">No Realms Currently Available for Grade {student_profile.grade || 'Unknown'}</h3>
+            <p className="text-slate-400 text-xs max-w-md mx-auto">
+              Curriculum practice worlds for Grade {student_profile.grade} have not yet been seeded on the platform. Please consult your mathematics educator.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {worlds.map((world) => (
+              <div 
+                key={world.id}
+                onClick={() => onSelectWorld && onSelectWorld(world.id)}
+                className={`p-6 rounded-2xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between ${
+                  world.is_unlocked 
+                    ? 'glass-panel hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/10'
+                    : 'bg-slate-900/40 border-quest-border opacity-70'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-2xl border border-quest-border">
+                      {world.title.includes('Algebra') ? '📐' : world.title.includes('Trig') ? '🌊' : '🏰'}
+                    </div>
+                    {world.is_unlocked ? (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        <Unlock className="w-3 h-3" />
+                        <span>Unlocked</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                        <Lock className="w-3 h-3" />
+                        <span>Locked</span>
+                      </span>
+                    )}
                   </div>
-                  {world.is_unlocked ? (
-                    <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                      <Unlock className="w-3 h-3" />
-                      <span>Unlocked</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
-                      <Lock className="w-3 h-3" />
-                      <span>Locked</span>
-                    </span>
-                  )}
+
+                  <h3 className="font-quest text-lg font-bold text-white">
+                    {world.title}
+                  </h3>
+                  <p className="text-slate-300 text-xs mt-1.5 line-clamp-2">
+                    {world.description}
+                  </p>
                 </div>
 
-                <h3 className="font-quest text-lg font-bold text-white">
-                  {world.title}
-                </h3>
-                <p className="text-slate-300 text-xs mt-1.5 line-clamp-2">
-                  {world.description}
-                </p>
-              </div>
-
-              <div className="mt-5 pt-4 border-t border-quest-border/80">
-                <div className="flex justify-between items-center text-xs text-slate-400 mb-1.5">
-                  <span>Progress</span>
-                  <span className="font-semibold text-slate-200">{world.completed_missions} / {world.total_missions} Missions</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div 
-                    className="h-full bg-emerald-500 rounded-full transition-all"
-                    style={{ width: `${world.completion_percentage}%` }}
-                  />
+                <div className="mt-5 pt-4 border-t border-quest-border/80">
+                  <div className="flex justify-between items-center text-xs text-slate-400 mb-1.5">
+                    <span>Progress</span>
+                    <span className="font-semibold text-slate-200">{world.completed_missions} / {world.total_missions} Missions</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div 
+                      className="h-full bg-emerald-500 rounded-full transition-all"
+                      style={{ width: `${world.completion_percentage}%` }}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 5. Recently Completed Missions & Achievements Grid */}

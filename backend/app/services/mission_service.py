@@ -1,8 +1,10 @@
+import random
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Tuple, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
+from sqlalchemy.exc import IntegrityError
 from fractions import Fraction
 
 from app.models.user import User
@@ -13,10 +15,139 @@ from app.models.curriculum import (
     Question,
     Attempt,
     MissionProgress,
+    MissionSession,
     MissionStatus
 )
 from app.models.gamification import RewardLedger, Badge, UserBadge
 from app.services.dashboard_service import calculate_player_level
+
+def get_or_create_attempt_order(
+    db: Session,
+    student_id: int,
+    mission_id: int,
+    question_ids: List[int]
+) -> List[int]:
+    """
+    Randomizes question order separately for each student attempt/session.
+    - Protected at database level via partial unique index on (user_id, mission_id) WHERE is_active = True.
+    - Coordinated cross-instance via PostgreSQL transaction-scoped advisory locks.
+    - Avoids giving the same first question to concurrently attempting students whenever >= 2 questions exist.
+    - Preserves generated question order across page refreshes during an active attempt.
+    - Guarantees zero duplicate questions per attempt (permutation of unique question IDs).
+    - Database read/write failures raise controlled HTTP 503 errors (no unsafe silent fallback).
+    """
+    if len(question_ids) <= 1:
+        return list(question_ids)
+
+    # 1. Check for existing active session in DB
+    try:
+        active_db_session = db.query(MissionSession).filter(
+            MissionSession.user_id == student_id,
+            MissionSession.mission_id == mission_id,
+            MissionSession.is_active == True
+        ).order_by(MissionSession.created_at.desc()).first()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Session storage unavailable. Please retry."
+        ) from exc
+
+    if active_db_session and active_db_session.question_order:
+        saved_order = [int(q) for q in active_db_session.question_order]
+        if set(saved_order) == set(question_ids):
+            return saved_order
+
+    # 2. Acquire transaction-scoped advisory lock in PostgreSQL for mission concurrency coordination
+    try:
+        if db.bind and db.bind.dialect.name == "postgresql":
+            db.execute(
+                text("SELECT pg_advisory_xact_lock(942100000 + :m_id)"),
+                {"m_id": mission_id}
+            )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Session storage unavailable. Please retry."
+        ) from exc
+
+    # 3. Under lock, re-query to verify another concurrent request did not create the session
+    try:
+        active_db_session = db.query(MissionSession).filter(
+            MissionSession.user_id == student_id,
+            MissionSession.mission_id == mission_id,
+            MissionSession.is_active == True
+        ).order_by(MissionSession.created_at.desc()).first()
+
+        if active_db_session and active_db_session.question_order:
+            saved_order = [int(q) for q in active_db_session.question_order]
+            if set(saved_order) == set(question_ids):
+                return saved_order
+
+        # Re-query active sessions belonging to other students to find their committed first questions
+        other_active = db.query(MissionSession).filter(
+            MissionSession.mission_id == mission_id,
+            MissionSession.user_id != student_id,
+            MissionSession.is_active == True
+        ).all()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Session storage unavailable. Please retry."
+        ) from exc
+
+    concurrent_first_ids = {
+        int(s.question_order[0])
+        for s in other_active
+        if s.question_order and len(s.question_order) > 0
+    }
+
+    # Pick first question excluding other students' active first questions when >= 2 questions exist
+    candidate_first = [qid for qid in question_ids if qid not in concurrent_first_ids]
+    if not candidate_first:
+        candidate_first = list(question_ids)
+
+    first_qid = random.choice(candidate_first)
+    remaining = [qid for qid in question_ids if qid != first_qid]
+    random.shuffle(remaining)
+    new_order = [first_qid] + remaining
+
+    # 4. Save active session to DB; handle race conditions via partial unique index IntegrityError
+    try:
+        new_session = MissionSession(
+            user_id=student_id,
+            mission_id=mission_id,
+            question_order=new_order,
+            is_active=True
+        )
+        db.add(new_session)
+        db.commit()
+        return new_order
+    except IntegrityError:
+        db.rollback()
+        try:
+            existing = db.query(MissionSession).filter(
+                MissionSession.user_id == student_id,
+                MissionSession.mission_id == mission_id,
+                MissionSession.is_active == True
+            ).order_by(MissionSession.created_at.desc()).first()
+            if existing and existing.question_order:
+                return [int(q) for q in existing.question_order]
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Session storage unavailable. Please retry."
+        )
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Session storage unavailable. Please retry."
+        ) from exc
+
 
 def normalize_answer(ans: str) -> str:
     """Helper to strip punctuation, spaces, and case differences for robust answer comparison."""
@@ -133,6 +264,11 @@ def get_mission_for_student(db: Session, mission_id: int, student: User) -> Dict
                   .order_by(Question.display_order)\
                   .all()
 
+    # Apply server-side attempt randomization (preserves active attempt order, distinct concurrent firsts)
+    q_map = {q.id: q for q in questions}
+    ordered_ids = get_or_create_attempt_order(db, student.id, mission.id, list(q_map.keys()))
+    ordered_questions = [q_map[qid] for qid in ordered_ids if qid in q_map]
+
     questions_public = [
         {
             "id": q.id,
@@ -140,9 +276,9 @@ def get_mission_for_student(db: Session, mission_id: int, student: User) -> Dict
             "question_type": q.question_type,
             "options": q.options,
             "difficulty": q.difficulty,
-            "display_order": q.display_order
+            "display_order": idx + 1
         }
-        for q in questions
+        for idx, q in enumerate(ordered_questions)
     ]
 
     return {
@@ -425,6 +561,21 @@ def complete_mission(db: Session, student: User, mission_id: int) -> Dict[str, A
         else f"Mission finished with {accuracy_pct}% accuracy. Required to pass: {mission.pass_percentage}%. You can retry anytime to conquer this challenge!"
     )
 
+    # Deactivate active session so any new attempt will receive a fresh randomized question order
+    try:
+        db.query(MissionSession).filter(
+            MissionSession.user_id == student.id,
+            MissionSession.mission_id == mission.id,
+            MissionSession.is_active == True
+        ).update({"is_active": False})
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Session storage unavailable. Please retry."
+        ) from exc
+
     return {
         "mission_id": mission.id,
         "mission_title": mission.title,
@@ -441,3 +592,59 @@ def complete_mission(db: Session, student: User, mission_id: int) -> Dict[str, A
         "unlocked_missions": unlocked_missions,
         "message": message
     }
+
+def get_mission_teacher_preview(db: Session, mission_id: int) -> Dict[str, Any]:
+    """
+    Teacher and Admin curriculum inspection helper:
+    Returns full mission data including questions, options, correct answers,
+    step-by-step solutions, and diagnostic mistake explanations for classroom preparation.
+    """
+    mission = db.query(Mission).filter(Mission.id == mission_id).first()
+    if not mission:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mission not found.")
+
+    topic = db.query(Topic).filter(Topic.id == mission.topic_id).first()
+    world = db.query(World).filter(World.id == topic.world_id).first() if topic else None
+
+    questions = db.query(Question)\
+                  .filter(Question.mission_id == mission.id)\
+                  .order_by(Question.display_order)\
+                  .all()
+
+    return {
+        "id": mission.id,
+        "title": mission.title,
+        "instructions": mission.instructions,
+        "category": mission.category,
+        "difficulty": mission.difficulty,
+        "xp_reward": mission.xp_reward,
+        "pass_percentage": mission.pass_percentage,
+        "is_boss": mission.is_boss,
+        "topic": {
+            "id": topic.id if topic else 0,
+            "title": topic.title if topic else "General Topic",
+            "learning_objectives": topic.learning_objectives if topic else []
+        },
+        "world": {
+            "id": world.id if world else 0,
+            "title": world.title if world else "General World",
+            "grade": world.grade if world else 11
+        },
+        "questions": [
+            {
+                "id": q.id,
+                "display_order": q.display_order,
+                "prompt": q.prompt,
+                "question_type": q.question_type,
+                "options": q.options,
+                "correct_answer": q.correct_answer,
+                "explanation": q.explanation,
+                "step_by_step_solution": q.step_by_step_solution,
+                "common_mistakes": q.common_mistakes,
+                "difficulty": q.difficulty,
+                "tolerance": q.tolerance
+            }
+            for q in questions
+        ]
+    }
+

@@ -21,6 +21,8 @@ export default function LoginPage({ onNavigate }) {
       const loggedUser = await login(email, password);
       if (loggedUser?.role === 'admin') {
         onNavigate('admin');
+      } else if (loggedUser?.role === 'teacher') {
+        onNavigate('teacherDashboard');
       } else {
         onNavigate('dashboard');
       }

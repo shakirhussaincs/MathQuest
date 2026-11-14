@@ -1,9 +1,23 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Compass, User, LogOut, Shield, Award, Sparkles } from 'lucide-react';
+import { Compass, User, LogOut, Shield, Award, GraduationCap, LayoutDashboard } from 'lucide-react';
 
 export default function Navbar({ currentView, setCurrentView }) {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout } = useAuth();
+
+  const handleHomeClick = () => {
+    if (!user) {
+      setCurrentView('login');
+      return;
+    }
+    if (user.role === 'admin') {
+      setCurrentView('admin');
+    } else if (user.role === 'teacher') {
+      setCurrentView('teacherDashboard');
+    } else {
+      setCurrentView('dashboard');
+    }
+  };
 
   return (
     <nav className="glass-panel sticky top-0 z-50 border-b border-quest-border px-4 py-3 sm:px-6">
@@ -11,14 +25,32 @@ export default function Navbar({ currentView, setCurrentView }) {
         
         {/* Brand */}
         <div 
-          onClick={() => setCurrentView('dashboard')}
+          onClick={handleHomeClick}
           className="flex items-center space-x-3 cursor-pointer group"
         >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-transform">
-            <Compass className="w-6 h-6 text-slate-950 font-bold" />
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform ${
+            user?.role === 'admin'
+              ? 'bg-gradient-to-br from-purple-500 to-indigo-700 shadow-purple-500/20'
+              : user?.role === 'teacher'
+              ? 'bg-gradient-to-br from-cyan-500 to-blue-700 shadow-cyan-500/20'
+              : 'bg-gradient-to-br from-amber-500 to-amber-700 shadow-amber-500/20'
+          }`}>
+            {user?.role === 'admin' ? (
+              <Shield className="w-5 h-5 text-white font-bold" />
+            ) : user?.role === 'teacher' ? (
+              <GraduationCap className="w-6 h-6 text-white font-bold" />
+            ) : (
+              <Compass className="w-6 h-6 text-slate-950 font-bold" />
+            )}
           </div>
           <div>
-            <span className="font-quest text-xl font-extrabold tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-amber-200 to-amber-500">
+            <span className={`font-quest text-xl font-extrabold tracking-wide text-transparent bg-clip-text ${
+              user?.role === 'admin'
+                ? 'bg-gradient-to-r from-purple-300 via-purple-100 to-indigo-400'
+                : user?.role === 'teacher'
+                ? 'bg-gradient-to-r from-cyan-300 via-cyan-100 to-blue-400'
+                : 'bg-gradient-to-r from-amber-400 via-amber-200 to-amber-500'
+            }`}>
               MATHQUEST
             </span>
             <span className="block text-[10px] tracking-widest text-slate-400 font-semibold uppercase">
@@ -49,35 +81,73 @@ export default function Navbar({ currentView, setCurrentView }) {
               </span>
             </div>
 
-            {/* Navigation Buttons */}
-            <button
-              onClick={() => setCurrentView('dashboard')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                currentView === 'dashboard' 
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-md shadow-amber-500/20' 
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              Dashboard
-            </button>
+            {/* Navigation Buttons based on Role */}
+            {user.role === 'student' && (
+              <>
+                <button
+                  onClick={() => setCurrentView('dashboard')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center space-x-1.5 ${
+                    currentView === 'dashboard' 
+                      ? 'bg-amber-500 text-slate-950 font-semibold shadow-md shadow-amber-500/20' 
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Compass className="w-4 h-4" />
+                  <span>Dashboard</span>
+                </button>
 
-            <button
-              onClick={() => setCurrentView('leaderboard')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center space-x-1.5 ${
-                currentView === 'leaderboard' 
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-md shadow-amber-500/20' 
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <Award className="w-4 h-4" />
-              <span>Leaderboard</span>
-            </button>
+                <button
+                  onClick={() => setCurrentView('leaderboard')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center space-x-1.5 ${
+                    currentView === 'leaderboard' 
+                      ? 'bg-amber-500 text-slate-950 font-semibold shadow-md shadow-amber-500/20' 
+                      : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Leaderboard</span>
+                </button>
+              </>
+            )}
 
+            {user.role === 'teacher' && (
+              <button
+                onClick={() => setCurrentView('teacherDashboard')}
+                className={`px-3.5 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center space-x-1.5 ${
+                  currentView === 'teacherDashboard' 
+                    ? 'bg-cyan-600 text-white font-semibold shadow-md shadow-cyan-500/20' 
+                    : 'text-cyan-300 hover:text-white hover:bg-cyan-900/30'
+                }`}
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>Educator Workspace</span>
+              </button>
+            )}
+
+            {user.role === 'admin' && (
+              <button
+                onClick={() => setCurrentView('admin')}
+                className={`px-3.5 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center space-x-1.5 ${
+                  currentView === 'admin' 
+                    ? 'bg-purple-600 text-white font-semibold shadow-md shadow-purple-500/20' 
+                    : 'text-purple-300 hover:text-white hover:bg-purple-900/30'
+                }`}
+              >
+                <Shield className="w-4 h-4" />
+                <span>Command Console</span>
+              </button>
+            )}
+
+            {/* Profile Button */}
             <button
               onClick={() => setCurrentView('profile')}
               className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center space-x-1.5 ${
                 currentView === 'profile' 
-                  ? 'bg-amber-500 text-slate-950 font-semibold shadow-md shadow-amber-500/20' 
+                  ? user.role === 'admin'
+                    ? 'bg-purple-600 text-white font-semibold'
+                    : user.role === 'teacher'
+                    ? 'bg-cyan-600 text-white font-semibold'
+                    : 'bg-amber-500 text-slate-950 font-semibold shadow-md shadow-amber-500/20' 
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
               }`}
             >
@@ -85,23 +155,15 @@ export default function Navbar({ currentView, setCurrentView }) {
               <span className="hidden sm:inline">Profile</span>
             </button>
 
-            {isAdmin && (
-              <button
-                onClick={() => setCurrentView('admin')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors flex items-center space-x-1.5 ${
-                  currentView === 'admin' 
-                    ? 'bg-purple-600 text-white font-semibold shadow-md shadow-purple-500/20' 
-                    : 'text-purple-300 hover:text-white hover:bg-purple-900/30'
-                }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span className="hidden sm:inline">Admin</span>
-              </button>
-            )}
-
             {/* User display badge */}
             <div className="flex items-center space-x-2 pl-2 border-l border-quest-border">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white shadow-inner">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-inner ${
+                user.role === 'admin'
+                  ? 'bg-gradient-to-tr from-purple-600 to-indigo-700'
+                  : user.role === 'teacher'
+                  ? 'bg-gradient-to-tr from-cyan-600 to-blue-700'
+                  : 'bg-gradient-to-tr from-amber-500 to-orange-600'
+              }`}>
                 {user.display_name.charAt(0).toUpperCase()}
               </div>
               <span className="hidden lg:inline text-sm font-medium text-slate-200">
@@ -138,4 +200,3 @@ export default function Navbar({ currentView, setCurrentView }) {
     </nav>
   );
 }
-

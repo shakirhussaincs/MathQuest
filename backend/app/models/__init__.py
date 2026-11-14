@@ -6,6 +6,7 @@ from app.models.curriculum import (
     Question,
     Attempt,
     MissionProgress,
+    MissionSession,
     DifficultyLevel,
     MissionStatus
 )
@@ -20,6 +21,7 @@ __all__ = [
     "Question",
     "Attempt",
     "MissionProgress",
+    "MissionSession",
     "DifficultyLevel",
     "MissionStatus",
     "RewardLedger",

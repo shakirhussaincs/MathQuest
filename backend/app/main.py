@@ -84,7 +84,14 @@ def ensure_fixed_admin(db):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: create tables and seed default users, curriculum and badges
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as exc:
+        print(
+            f"CRITICAL: Database schema creation failed — {type(exc).__name__}: {exc}. "
+            "Check database connectivity and DDL permissions before deployment."
+        )
+        raise
     db = SessionLocal()
     try:
         seed_curriculum_and_badges(db)

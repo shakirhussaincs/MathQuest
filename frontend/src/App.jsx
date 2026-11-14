@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import StudentDashboard from './pages/StudentDashboard';
+import TeacherDashboard from './pages/TeacherDashboard';
 import WorldDetailPage from './pages/WorldDetailPage';
 import MissionPlayer from './pages/MissionPlayer';
 import LeaderboardPage from './pages/LeaderboardPage';
@@ -56,35 +57,75 @@ function AppContent() {
     navigateTo('missionPlayer');
   };
 
+  // Determine effective dashboard view to guarantee role isolation
+  const renderDashboardByRole = () => {
+    if (user.role === 'admin') {
+      return <AdminPage />;
+    }
+    if (user.role === 'teacher') {
+      return <TeacherDashboard onNavigate={navigateTo} />;
+    }
+    return (
+      <StudentDashboard 
+        onNavigate={navigateTo}
+        onSelectWorld={handleSelectWorld}
+        onSelectMission={handleSelectMission}
+      />
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0e17] flex flex-col">
       <Navbar currentView={currentView} setCurrentView={navigateTo} />
       
       <main className="flex-1 pb-16">
-        {currentView === 'dashboard' && (
-          <StudentDashboard 
-            onNavigate={navigateTo}
-            onSelectWorld={handleSelectWorld}
-            onSelectMission={handleSelectMission}
-          />
+        {/* Role Home View / Dashboard */}
+        {currentView === 'dashboard' && renderDashboardByRole()}
+
+        {/* Teacher Educator Studio */}
+        {currentView === 'teacherDashboard' && (
+          user.role === 'teacher' || user.role === 'admin' ? (
+            <TeacherDashboard onNavigate={navigateTo} />
+          ) : (
+            renderDashboardByRole()
+          )
         )}
 
+        {/* Admin Command Console */}
+        {currentView === 'admin' && (
+          user.role === 'admin' ? (
+            <AdminPage />
+          ) : (
+            renderDashboardByRole()
+          )
+        )}
+
+        {/* Student World Detail & Missions */}
         {currentView === 'worldDetail' && (
-          <WorldDetailPage 
-            worldId={selectedWorldId}
-            onBack={() => navigateTo('dashboard')}
-            onSelectMission={handleSelectMission}
-          />
+          user.role === 'student' ? (
+            <WorldDetailPage 
+              worldId={selectedWorldId}
+              onBack={() => navigateTo('dashboard')}
+              onSelectMission={handleSelectMission}
+            />
+          ) : (
+            renderDashboardByRole()
+          )
         )}
 
         {currentView === 'missionPlayer' && (
-          <MissionPlayer
-            missionId={selectedMissionId}
-            onBack={() => navigateTo('dashboard')}
-            onComplete={() => navigateTo('dashboard')}
-          />
+          user.role === 'student' ? (
+            <MissionPlayer
+              missionId={selectedMissionId}
+              onBack={() => navigateTo('dashboard')}
+              onComplete={() => navigateTo('dashboard')}
+            />
+          ) : (
+            renderDashboardByRole()
+          )
         )}
 
+        {/* Common Views */}
         {currentView === 'leaderboard' && (
           <LeaderboardPage />
         )}
@@ -92,22 +133,10 @@ function AppContent() {
         {currentView === 'profile' && (
           <ProfilePage />
         )}
-
-        {currentView === 'admin' && (
-          user?.role === 'admin' ? (
-            <AdminPage />
-          ) : (
-            <StudentDashboard 
-              onNavigate={navigateTo}
-              onSelectWorld={handleSelectWorld}
-              onSelectMission={handleSelectMission}
-            />
-          )
-        )}
       </main>
 
       <footer className="border-t border-quest-border/60 py-6 text-center text-xs text-slate-500">
-        MathQuest &copy; 2026–27 Sindh STREAM Activities • Gamified Mathematics Practice for Grades 11–12
+        MathQuest &copy; 2026–27 Sindh STREAM Activities • Gamified Mathematics Practice for Grades 1–12
       </footer>
     </div>
   );
